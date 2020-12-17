@@ -5,9 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import org.mtransit.parser.CleanUtils;
 import org.mtransit.parser.DefaultAgencyTools;
 import org.mtransit.parser.MTLog;
-import org.mtransit.parser.Pair;
-import org.mtransit.parser.SplitUtils;
-import org.mtransit.parser.SplitUtils.RouteTripSpec;
 import org.mtransit.parser.StringUtils;
 import org.mtransit.parser.Utils;
 import org.mtransit.parser.gtfs.data.GCalendar;
@@ -16,17 +13,11 @@ import org.mtransit.parser.gtfs.data.GRoute;
 import org.mtransit.parser.gtfs.data.GSpec;
 import org.mtransit.parser.gtfs.data.GStop;
 import org.mtransit.parser.gtfs.data.GTrip;
-import org.mtransit.parser.gtfs.data.GTripStop;
 import org.mtransit.parser.mt.data.MAgency;
-import org.mtransit.parser.mt.data.MInboundType;
 import org.mtransit.parser.mt.data.MRoute;
 import org.mtransit.parser.mt.data.MTrip;
-import org.mtransit.parser.mt.data.MTripStop;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,42 +37,43 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 		new AirdrieTransitBusAgencyTools().start(args);
 	}
 
-	private HashSet<String> serviceIds;
+	@Nullable
+	private HashSet<Integer> serviceIdInts;
 
 	@Override
 	public void start(@NotNull String[] args) {
 		MTLog.log("Generating Airdrie Transit bus data...");
 		long start = System.currentTimeMillis();
-		this.serviceIds = extractUsefulServiceIds(args, this, true);
+		this.serviceIdInts = extractUsefulServiceIdInts(args, this, true);
 		super.start(args);
 		MTLog.log("Generating Airdrie Transit bus data... DONE in %s.", Utils.getPrettyDuration(System.currentTimeMillis() - start));
 	}
 
 	@Override
 	public boolean excludingAll() {
-		return this.serviceIds != null && this.serviceIds.isEmpty();
+		return this.serviceIdInts != null && this.serviceIdInts.isEmpty();
 	}
 
 	@Override
 	public boolean excludeCalendar(@NotNull GCalendar gCalendar) {
-		if (this.serviceIds != null) {
-			return excludeUselessCalendar(gCalendar, this.serviceIds);
+		if (this.serviceIdInts != null) {
+			return excludeUselessCalendarInt(gCalendar, this.serviceIdInts);
 		}
 		return super.excludeCalendar(gCalendar);
 	}
 
 	@Override
 	public boolean excludeCalendarDate(@NotNull GCalendarDate gCalendarDates) {
-		if (this.serviceIds != null) {
-			return excludeUselessCalendarDate(gCalendarDates, this.serviceIds);
+		if (this.serviceIdInts != null) {
+			return excludeUselessCalendarDateInt(gCalendarDates, this.serviceIdInts);
 		}
 		return super.excludeCalendarDate(gCalendarDates);
 	}
 
 	@Override
 	public boolean excludeTrip(@NotNull GTrip gTrip) {
-		if (this.serviceIds != null) {
-			return excludeUselessTrip(gTrip, this.serviceIds);
+		if (this.serviceIdInts != null) {
+			return excludeUselessTripInt(gTrip, this.serviceIdInts);
 		}
 		return super.excludeTrip(gTrip);
 	}
@@ -99,20 +91,21 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 
 	@Override
 	public long getRouteId(@NotNull GRoute gRoute) {
-		if (!Utils.isDigitsOnly(gRoute.getRouteShortName())) {
-			Matcher matcher = DIGITS.matcher(gRoute.getRouteShortName());
+		final String rsn = gRoute.getRouteShortName();
+		if (!Utils.isDigitsOnly(rsn)) {
+			Matcher matcher = DIGITS.matcher(rsn);
 			if (matcher.find()) {
 				int digits = Integer.parseInt(matcher.group());
-				String rsn = gRoute.getRouteShortName().toLowerCase(Locale.ENGLISH);
-				if (rsn.endsWith("am")) {
+				String rsnLC = rsn.toLowerCase(Locale.ENGLISH);
+				if (rsnLC.endsWith("am")) {
 					return digits + RID_ENDS_WITH_AM;
-				} else if (rsn.endsWith("pm")) {
+				} else if (rsnLC.endsWith("pm")) {
 					return digits + RID_ENDS_WITH_PM;
 				}
 				throw new MTLog.Fatal("Unexpected route ID for %s!", gRoute);
 			}
 		}
-		return Long.parseLong(gRoute.getRouteShortName());
+		return Long.parseLong(rsn);
 	}
 
 	@Nullable
@@ -137,124 +130,17 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 		return AGENCY_COLOR;
 	}
 
-	private static final String AIRDRIE = "Airdrie";
-	private static final String CALGARY = "Calgary";
-	private static final String MC_KNIGHT = "McKnight";
-	private static final String SAGEWOOD = "Sagewood";
-	private static final String SIERRA_SPRINGS = "Sierra Spgs";
-	private static final String REUNION = "Reunion";
-	private static final String GENESIS_PLACE = "Genesis Pl";
-	private static final String _8TH_STREET = "8th St";
-
-	private static HashMap<Long, RouteTripSpec> ALL_ROUTE_TRIPS2;
-
-	static {
-		//noinspection UnnecessaryLocalVariable
-		HashMap<Long, RouteTripSpec> map2 = new HashMap<>();
-		ALL_ROUTE_TRIPS2 = map2;
-	}
-
-	@Override
-	public int compareEarly(long routeId,
-							@NotNull List<MTripStop> list1, @NotNull List<MTripStop> list2,
-							@NotNull MTripStop ts1, @NotNull MTripStop ts2,
-							@NotNull GStop ts1GStop, @NotNull GStop ts2GStop) {
-		if (ALL_ROUTE_TRIPS2.containsKey(routeId)) {
-			return ALL_ROUTE_TRIPS2.get(routeId).compare(routeId, list1, list2, ts1, ts2, ts1GStop, ts2GStop, this);
-		}
-		return super.compareEarly(routeId, list1, list2, ts1, ts2, ts1GStop, ts2GStop);
-	}
-
-	@NotNull
-	@Override
-	public ArrayList<MTrip> splitTrip(@NotNull MRoute mRoute, @Nullable GTrip gTrip, @NotNull GSpec gtfs) {
-		if (ALL_ROUTE_TRIPS2.containsKey(mRoute.getId())) {
-			return ALL_ROUTE_TRIPS2.get(mRoute.getId()).getAllTrips();
-		}
-		return super.splitTrip(mRoute, gTrip, gtfs);
-	}
-
-	@NotNull
-	@Override
-	public Pair<Long[], Integer[]> splitTripStop(@NotNull MRoute mRoute, @NotNull GTrip gTrip, @NotNull GTripStop gTripStop, @NotNull ArrayList<MTrip> splitTrips, @NotNull GSpec routeGTFS) {
-		if (ALL_ROUTE_TRIPS2.containsKey(mRoute.getId())) {
-			return SplitUtils.splitTripStop(mRoute, gTrip, gTripStop, routeGTFS, ALL_ROUTE_TRIPS2.get(mRoute.getId()), this);
-		}
-		return super.splitTripStop(mRoute, gTrip, gTripStop, splitTrips, routeGTFS);
-	}
-
 	@Override
 	public void setTripHeadsign(@NotNull MRoute mRoute, @NotNull MTrip mTrip, @NotNull GTrip gTrip, @NotNull GSpec gtfs) {
-		if (ALL_ROUTE_TRIPS2.containsKey(mRoute.getId())) {
-			return; // split
-		}
-		final int directionId = gTrip.getDirectionIdOrDefault();
-		if (mRoute.getId() == 1L) {
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(SAGEWOOD, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(GENESIS_PLACE, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 2L) {
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(REUNION, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(SIERRA_SPRINGS, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 3L) {
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(GENESIS_PLACE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(_8TH_STREET, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 900L) {
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(AIRDRIE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(MC_KNIGHT, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 901L + RID_ENDS_WITH_AM) { // 901AM
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(AIRDRIE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(CALGARY, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 901L + RID_ENDS_WITH_PM) { // 901PM
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(AIRDRIE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(CALGARY, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 902L + RID_ENDS_WITH_AM) { // 902AM
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(AIRDRIE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(CALGARY, directionId);
-				return;
-			}
-		} else if (mRoute.getId() == 902L + RID_ENDS_WITH_PM) { // 902PM
-			if (directionId == MInboundType.INBOUND.intValue()) {
-				mTrip.setHeadsignString(AIRDRIE, directionId);
-				return;
-			} else if (directionId == MInboundType.OUTBOUND.intValue()) {
-				mTrip.setHeadsignString(CALGARY, directionId);
-				return;
-			}
-		}
-		mTrip.setHeadsignString(cleanTripHeadsign(gTrip.getTripHeadsign()), directionId);
+		mTrip.setHeadsignString(
+				cleanTripHeadsign(gTrip.getTripHeadsignOrDefault()),
+				gTrip.getDirectionIdOrDefault()
+		);
+	}
+
+	@Override
+	public boolean directionFinderEnabled() {
+		return true;
 	}
 
 	@Override
@@ -271,12 +157,9 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 		return CleanUtils.cleanLabel(tripHeadsign);
 	}
 
-	private static final Pattern STARTS_WITH_BOUNDS = Pattern.compile("(^(eb|nb|sb|wb) )*", Pattern.CASE_INSENSITIVE);
-
 	@NotNull
 	@Override
 	public String cleanStopName(@NotNull String gStopName) {
-		gStopName = STARTS_WITH_BOUNDS.matcher(gStopName).replaceAll(StringUtils.EMPTY);
 		gStopName = CleanUtils.CLEAN_AND.matcher(gStopName).replaceAll(CleanUtils.CLEAN_AND_REPLACEMENT);
 		gStopName = CleanUtils.CLEAN_AT.matcher(gStopName).replaceAll(CleanUtils.CLEAN_AT_REPLACEMENT);
 		gStopName = CleanUtils.cleanSlashes(gStopName);
