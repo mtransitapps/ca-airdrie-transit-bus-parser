@@ -22,6 +22,8 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.mtransit.parser.Constants.EMPTY;
+
 // https://data-airdrie.opendata.arcgis.com/datasets/e4625b7cf3634377a945d89e7d7c1fb3_0
 // https://www.airdrie.ca/gettransitgtfs.cfm
 // TODO real-time https://airdrietransit.transloc.com/
@@ -136,6 +138,32 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 				cleanTripHeadsign(gTrip.getTripHeadsignOrDefault()),
 				gTrip.getDirectionIdOrDefault()
 		);
+	}
+
+	private static final Pattern INBOUND_OUTBOUND_ = CleanUtils.cleanWords("inbound", "outbound");
+
+	private static final Pattern TRANSIT_TERMINAL_ = CleanUtils.cleanWords("transit terminal");
+	private static final String TRANSIT_TERMINAL_REPLACEMENT = CleanUtils.cleanWordsReplacement("Term");
+
+	private static final Pattern STARTS_WITH_BOUNDS = Pattern.compile("(^(eb|nb|sb|wb) )*", Pattern.CASE_INSENSITIVE);
+
+	private static final Pattern KEEP_INSIDE_PARENTHESES = Pattern.compile("(([^(]+)\\(([^)]+)\\))", Pattern.CASE_INSENSITIVE);
+	private static final String KEEP_INSIDE_PARENTHESES_REPLACEMENT = "$3";
+
+	private static final Pattern ENDS_WITH_DASH_ = Pattern.compile("( - .*$)*", Pattern.CASE_INSENSITIVE);
+
+	@NotNull
+	@Override
+	public String cleanDirectionHeadsign(@NotNull String directionHeadSign) {
+		directionHeadSign = super.cleanDirectionHeadsign(directionHeadSign);
+		// ignore default trips head-signs
+		directionHeadSign = INBOUND_OUTBOUND_.matcher(directionHeadSign).replaceAll(EMPTY);
+		// clean stop name
+		directionHeadSign = STARTS_WITH_BOUNDS.matcher(directionHeadSign).replaceAll(EMPTY);
+		directionHeadSign = TRANSIT_TERMINAL_.matcher(directionHeadSign).replaceAll(TRANSIT_TERMINAL_REPLACEMENT);
+		directionHeadSign = KEEP_INSIDE_PARENTHESES.matcher(directionHeadSign).replaceAll(KEEP_INSIDE_PARENTHESES_REPLACEMENT);
+		directionHeadSign = ENDS_WITH_DASH_.matcher(directionHeadSign).replaceAll(EMPTY);
+		return directionHeadSign;
 	}
 
 	@Override
