@@ -95,17 +95,25 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 	public long getRouteId(@NotNull GRoute gRoute) {
 		final String rsn = gRoute.getRouteShortName();
 		if (!Utils.isDigitsOnly(rsn)) {
+			final String rsnLC = rsn.toLowerCase(Locale.ENGLISH);
 			Matcher matcher = DIGITS.matcher(rsn);
 			if (matcher.find()) {
 				int digits = Integer.parseInt(matcher.group());
-				String rsnLC = rsn.toLowerCase(Locale.ENGLISH);
 				if (rsnLC.endsWith("am")) {
 					return digits + RID_ENDS_WITH_AM;
 				} else if (rsnLC.endsWith("pm")) {
 					return digits + RID_ENDS_WITH_PM;
 				}
-				throw new MTLog.Fatal("Unexpected route ID for %s!", gRoute);
 			}
+			if ("downtown ice service".equals(rsnLC)) {
+				String rlnLC = gRoute.getRouteLongName().toLowerCase(Locale.ENGLISH);
+				if (rlnLC.endsWith("morning")) {
+					return 900 + RID_ENDS_WITH_AM;
+				} else if (rlnLC.endsWith("afternoon")) {
+					return 900 + RID_ENDS_WITH_PM;
+				}
+			}
+			throw new MTLog.Fatal("Unexpected route ID for %s!", gRoute);
 		}
 		return Long.parseLong(rsn);
 	}
@@ -113,6 +121,16 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 	@Nullable
 	@Override
 	public String getRouteShortName(@NotNull GRoute gRoute) {
+		final String rsn = gRoute.getRouteShortName();
+		final String rsnLC = rsn.toLowerCase(Locale.ENGLISH);
+		if ("downtown ice service".equals(rsnLC)) {
+			String rlnLC = gRoute.getRouteLongName().toLowerCase(Locale.ENGLISH);
+			if (rlnLC.endsWith("morning")) {
+				return "D ICE AM";
+			} else if (rlnLC.endsWith("afternoon")) {
+				return "D ICE PM";
+			}
+		}
 		return super.getRouteShortName(gRoute);
 	}
 
@@ -145,7 +163,7 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 	private static final Pattern TRANSIT_TERMINAL_ = CleanUtils.cleanWords("transit terminal");
 	private static final String TRANSIT_TERMINAL_REPLACEMENT = CleanUtils.cleanWordsReplacement("Term");
 
-	private static final Pattern STARTS_WITH_BOUNDS = Pattern.compile("(^(eb|nb|sb|wb) )*", Pattern.CASE_INSENSITIVE);
+	private static final Pattern STARTS_WITH_BOUNDS = Pattern.compile("(^(eb|nb|sb|wb) )", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern KEEP_INSIDE_PARENTHESES = Pattern.compile("(([^(]+)\\(([^)]+)\\))", Pattern.CASE_INSENSITIVE);
 	private static final String KEEP_INSIDE_PARENTHESES_REPLACEMENT = "$3";
