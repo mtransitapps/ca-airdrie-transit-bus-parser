@@ -3,7 +3,6 @@ package org.mtransit.parser.ca_airdrie_transit_bus;
 import static org.mtransit.commons.Constants.EMPTY;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.mtransit.commons.CharUtils;
 import org.mtransit.commons.CleanUtils;
 import org.mtransit.commons.StringUtils;
@@ -43,7 +42,7 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 		return MAgency.ROUTE_TYPE_BUS;
 	}
 
-	private static final Pattern DIGITS = Pattern.compile("[\\d]+");
+	private static final Pattern DIGITS = Pattern.compile("\\d+");
 
 	private static final long RID_ENDS_WITH_AM = 10_000L;
 	private static final long RID_ENDS_WITH_PM = 20_000L;
@@ -75,7 +74,7 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 		return Long.parseLong(rsn);
 	}
 
-	@Nullable
+	@NotNull
 	@Override
 	public String getRouteShortName(@NotNull GRoute gRoute) {
 		final String rsn = gRoute.getRouteShortName();
@@ -121,8 +120,8 @@ public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
 
 	@NotNull
 	@Override
-	public String cleanDirectionHeadsign(boolean fromStopName, @NotNull String directionHeadSign) {
-		directionHeadSign = super.cleanDirectionHeadsign(fromStopName, directionHeadSign);
+	public String cleanDirectionHeadsign(int directionId, boolean fromStopName, @NotNull String directionHeadSign) {
+		directionHeadSign = super.cleanDirectionHeadsign(directionId, fromStopName, directionHeadSign);
 		// ignore default trips head-signs
 		directionHeadSign = INBOUND_OUTBOUND_.matcher(directionHeadSign).replaceAll(EMPTY);
 		// clean stop name
