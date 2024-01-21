@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// https://data-airdrie.opendata.arcgis.com/datasets/e4625b7cf3634377a945d89e7d7c1fb3_0
+// https://data-airdrie.opendata.arcgis.com/datasets/airdrie-transit-bus-routes/about
 // https://www.airdrie.ca/gettransitgtfs.cfm
 // TODO real-time https://airdrietransit.transloc.com/
 public class AirdrieTransitBusAgencyTools extends DefaultAgencyTools {
